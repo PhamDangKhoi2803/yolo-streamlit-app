@@ -1,13 +1,14 @@
 import io
-from typing import Any
-import cv2
 import sys
+import cv2
 import streamlit as st
 from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 from ultralytics import YOLO
 from ultralytics.utils import LOGGER
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.downloads import GITHUB_ASSETS_STEMS
+from typing import Any
+
 
 class Inference:
     """
@@ -123,30 +124,36 @@ class Inference:
         self.sidebar()
         self.source_upload()
         self.configure()
-    
+
         if self.st.sidebar.button("Start"):
             stop_button = self.st.button("Stop")
-    
-            # Kiểm tra nếu nguồn là webcam
+
+            # Debug output
+            self.st.write(f"Video source: {self.vid_file_name}")
+            self.st.write(f"Model: {self.model}")
+            self.st.write(f"Enable Tracking: {self.enable_trk}")
+            self.st.write(f"Confidence: {self.conf}, IoU: {self.iou}")
+
             if self.source == "webcam":
+                self.st.write("Using webcam source.")
                 webrtc_streamer(
                     key="object-detection",
                     video_transformer_factory=lambda: self.VideoTransformer(self.model, self.conf, self.iou, self.selected_ind, self.enable_trk),
-                    video_source=0,  # Truyền chỉ số webcam, không phải file
+                    video_source=0,  # Webcam source
                     sendback_audio=False,
                 )
             elif self.source == "video" and self.vid_file_name != "":
+                self.st.write(f"Using video source: {self.vid_file_name}")
                 webrtc_streamer(
                     key="object-detection",
                     video_transformer_factory=lambda: self.VideoTransformer(self.model, self.conf, self.iou, self.selected_ind, self.enable_trk),
-                    video_source=self.vid_file_name,  # Truyền video file nếu chọn nguồn là video
+                    video_source=self.vid_file_name,  # Video file
                     sendback_audio=False,
                 )
-    
+
             # Handle stopping of inference
             if stop_button:
                 self.st.stop()
-
 
 if __name__ == "__main__":
     args = len(sys.argv)
