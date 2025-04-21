@@ -67,32 +67,28 @@ class Inference:
     """
 
     def __init__(self, **kwargs: Any):
-        """
-        Khởi tạo lớp Inference, kiểm tra yêu cầu Streamlit và thiết lập đường dẫn mô hình.
-
-        Args:
-            **kwargs (Any): Các đối số từ khóa bổ sung cho cấu hình mô hình.
-        """
-        check_requirements("streamlit>=1.29.0")  # Kiểm tra yêu cầu Streamlit
-        import streamlit as st
-
-        self.st = st  # Tham chiếu đến module Streamlit
-        self.source = None  # Lựa chọn nguồn video (webcam hoặc tệp video)
-        self.enable_trk = False  # Cờ để bật/tắt theo dõi đối tượng
-        self.conf = 0.25  # Ngưỡng độ tin cậy cho phát hiện
-        self.iou = 0.45  # Ngưỡng IoU cho non-maximum suppression
-        self.org_frame = None  # Vùng chứa cho khung hình gốc
-        self.ann_frame = None  # Vùng chứa cho khung hình chú thích
-        self.vid_file_name = None  # Tên tệp video hoặc chỉ số webcam
-        self.selected_ind = []  # Danh sách chỉ số lớp được chọn
-        self.model = None  # Thể hiện mô hình YOLO
-
-        self.temp_dict = {"model": None, **kwargs}
-        self.model_path = None  # Đường dẫn tệp mô hình
-        if self.temp_dict["model"] is not None:
-            self.model_path = self.temp_dict["model"]
-
-        LOGGER.info(f"Ultralytics Solutions: ✅ {self.temp_dict}")
+            check_requirements("streamlit>=1.29.0")
+            import streamlit as st
+    
+            self.st = st
+            self.source = None
+            self.enable_trk = False
+            self.conf = 0.25
+            self.iou = 0.45
+            self.org_frame = None
+            self.ann_frame = None
+            self.vid_file_name = None
+            self.selected_ind = []
+            self.model = None
+    
+            self.temp_dict = {"model": None, **kwargs}
+            self.model_path = None
+            if self.temp_dict["model"] is not None:
+                self.model_path = self.temp_dict["model"]
+    
+            # Trì hoãn import LOGGER cho đến khi cần
+            from ultralytics.utils import LOGGER
+            LOGGER.info(f"Ultralytics Solutions: ✅ {self.temp_dict}")
 
     def web_ui(self):
         """Thiết lập giao diện web Streamlit với các yếu tố HTML tùy chỉnh."""
@@ -149,9 +145,13 @@ class Inference:
 
     def configure(self):
         """Cấu hình mô hình và tải các lớp được chọn để suy luận."""
-        # Thêm menu dropdown để chọn mô hình
+        # Import ultralytics tại đây
+        from ultralytics import YOLO
+        from ultralytics.utils.downloads import GITHUB_ASSETS_STEMS
+
+        # Thêm dropdown menu cho chọn mô hình
         available_models = [x.replace("yolo", "YOLO") for x in GITHUB_ASSETS_STEMS if x.startswith("yolo11")]
-        if self.model_path:  # Nếu người dùng cung cấp mô hình tùy chỉnh, thêm mô hình vào danh sách
+        if self.model_path:
             available_models.insert(0, self.model_path.split(".pt")[0])
         selected_model = self.st.sidebar.selectbox("Mô hình", available_models)
 
@@ -164,7 +164,7 @@ class Inference:
         selected_classes = self.st.sidebar.multiselect("Lớp", class_names, default=class_names[:3])
         self.selected_ind = [class_names.index(option) for option in selected_classes]
 
-        if not isinstance(self.selected_ind, list):  # Đảm bảo selected_ind là danh sách
+        if not isinstance(self.selected_ind, list):
             self.selected_ind = list(self.selected_ind)
 
     def inference(self):
