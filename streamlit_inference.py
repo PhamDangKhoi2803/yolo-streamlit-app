@@ -132,30 +132,4 @@ class Inference:
             self.st.write(f"Video source: {self.vid_file_name}")
             self.st.write(f"Model: {self.model}")
             self.st.write(f"Enable Tracking: {self.enable_trk}")
-            self.st.write(f"Confidence: {self.conf}, IoU: {self.iou}")
-
-            if self.source == "webcam":
-                self.st.write("Using webcam source.")
-                webrtc_streamer(
-                    key="object-detection",
-                    video_transformer_factory=lambda: self.VideoTransformer(self.model, self.conf, self.iou, self.selected_ind, self.enable_trk),
-                    video_source=0,  # Webcam source
-                    sendback_audio=False,
-                )
-            elif self.source == "video" and self.vid_file_name != "":
-                self.st.write(f"Using video source: {self.vid_file_name}")
-                webrtc_streamer(
-                    key="object-detection",
-                    video_transformer_factory=lambda: self.VideoTransformer(self.model, self.conf, self.iou, self.selected_ind, self.enable_trk),
-                    video_source=self.vid_file_name,  # Video file
-                    sendback_audio=False,
-                )
-
-            # Handle stopping of inference
-            if stop_button:
-                self.st.stop()
-
-if __name__ == "__main__":
-    args = len(sys.argv)
-    model = sys.argv[1] if args > 1 else None
-    Inference(model=model).inference()
+            self.st.write(f"Confidence:
