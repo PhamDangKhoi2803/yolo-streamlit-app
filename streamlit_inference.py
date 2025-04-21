@@ -4,13 +4,18 @@ import io
 from typing import Any
 
 import cv2
+import numpy as np
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+import av
 
 from ultralytics import YOLO
 from ultralytics.utils import LOGGER
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.downloads import GITHUB_ASSETS_STEMS
 
+
 class VideoProcessor(VideoProcessorBase):
+    """Lớp xử lý video cho streamlit-webrtc để xử lý khung hình webcam."""
     def __init__(self):
         self.model = None
         self.conf = 0.25
@@ -38,106 +43,96 @@ class VideoProcessor(VideoProcessorBase):
             return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
         return frame
 
+
 class Inference:
     """
-    A class to perform object detection, image classification, image segmentation and pose estimation inference.
+    Lớp để thực hiện suy luận phát hiện đối tượng, phân loại hình ảnh, phân đoạn hình ảnh và ước lượng tư thế.
 
-    This class provides functionalities for loading models, configuring settings, uploading video files, and performing
-    real-time inference using Streamlit and Ultralytics YOLO models.
+    Lớp này cung cấp các chức năng để tải mô hình, cấu hình cài đặt, tải lên tệp video và thực hiện suy luận
+    thời gian thực bằng Streamlit và các mô hình Ultralytics YOLO.
 
-    Attributes:
-        st (module): Streamlit module for UI creation.
-        temp_dict (dict): Temporary dictionary to store the model path and other configuration.
-        model_path (str): Path to the loaded model.
-        model (YOLO): The YOLO model instance.
-        source (str): Selected video source (webcam or video file).
-        enable_trk (str): Enable tracking option ("Yes" or "No").
-        conf (float): Confidence threshold for detection.
-        iou (float): IoU threshold for non-maximum suppression.
-        org_frame (Any): Container for the original frame to be displayed.
-        ann_frame (Any): Container for the annotated frame to be displayed.
-        vid_file_name (str | int): Name of the uploaded video file or webcam index.
-        selected_ind (List[int]): List of selected class indices for detection.
-
-    Methods:
-        web_ui: Sets up the Streamlit web interface with custom HTML elements.
-        sidebar: Configures the Streamlit sidebar for model and inference settings.
-        source_upload: Handles video file uploads through the Streamlit interface.
-        configure: Configures the model and loads selected classes for inference.
-        inference: Performs real-time object detection inference.
-
-    Examples:
-        >>> inf = Inference(model="path/to/model.pt")  # Model is an optional argument
-        >>> inf.inference()
+    Thuộc tính:
+        st (module): Module Streamlit để tạo giao diện người dùng.
+        temp_dict (dict): Từ điển tạm thời để lưu đường dẫn mô hình và các cấu hình khác.
+        model_path (str): Đường dẫn đến mô hình đã tải.
+        model (YOLO): Thể hiện của mô hình YOLO.
+        source (str): Nguồn video được chọn (webcam hoặc tệp video).
+        enable_trk (str): Tùy chọn bật theo dõi ("Có" hoặc "Không").
+        conf (float): Ngưỡng độ tin cậy cho phát hiện.
+        iou (float): Ngưỡng IoU cho non-maximum suppression.
+        org_frame (Any): Vùng chứa cho khung hình gốc được hiển thị.
+        ann_frame (Any): Vùng chứa cho khung hình đã chú thích được hiển thị.
+        vid_file_name (str | int): Tên tệp video đã tải lên hoặc chỉ số webcam.
+        selected_ind (List[int]): Danh sách các chỉ số lớp được chọn để phát hiện.
     """
 
     def __init__(self, **kwargs: Any):
         """
-        Initialize the Inference class, checking Streamlit requirements and setting up the model path.
+        Khởi tạo lớp Inference, kiểm tra yêu cầu Streamlit và thiết lập đường dẫn mô hình.
 
         Args:
-            **kwargs (Any): Additional keyword arguments for model configuration.
+            **kwargs (Any): Các đối số từ khóa bổ sung cho cấu hình mô hình.
         """
-        check_requirements("streamlit>=1.29.0")  # scope imports for faster ultralytics package load speeds
+        check_requirements("streamlit>=1.29.0")  # Kiểm tra yêu cầu Streamlit
         import streamlit as st
 
-        self.st = st  # Reference to the Streamlit module
-        self.source = None  # Video source selection (webcam or video file)
-        self.enable_trk = False  # Flag to toggle object tracking
-        self.conf = 0.25  # Confidence threshold for detection
-        self.iou = 0.45  # Intersection-over-Union (IoU) threshold for non-maximum suppression
-        self.org_frame = None  # Container for the original frame display
-        self.ann_frame = None  # Container for the annotated frame display
-        self.vid_file_name = None  # Video file name or webcam index
-        self.selected_ind = []  # List of selected class indices for detection
-        self.model = None  # YOLO model instance
+        self.st = st  # Tham chiếu đến module Streamlit
+        self.source = None  # Lựa chọn nguồn video (webcam hoặc tệp video)
+        self.enable_trk = False  # Cờ để bật/tắt theo dõi đối tượng
+        self.conf = 0.25  # Ngưỡng độ tin cậy cho phát hiện
+        self.iou = 0.45  # Ngưỡng IoU cho non-maximum suppression
+        self.org_frame = None  # Vùng chứa cho khung hình gốc
+        self.ann_frame = None  # Vùng chứa cho khung hình chú thích
+        self.vid_file_name = None  # Tên tệp video hoặc chỉ số webcam
+        self.selected_ind = []  # Danh sách chỉ số lớp được chọn
+        self.model = None  # Thể hiện mô hình YOLO
 
         self.temp_dict = {"model": None, **kwargs}
-        self.model_path = None  # Model file path
+        self.model_path = None  # Đường dẫn tệp mô hình
         if self.temp_dict["model"] is not None:
             self.model_path = self.temp_dict["model"]
 
         LOGGER.info(f"Ultralytics Solutions: ✅ {self.temp_dict}")
 
     def web_ui(self):
-        """Sets up the Streamlit web interface with custom HTML elements."""
-        menu_style_cfg = """<style>MainMenu {visibility: hidden;}</style>"""  # Hide main menu style
+        """Thiết lập giao diện web Streamlit với các yếu tố HTML tùy chỉnh."""
+        menu_style_cfg = """<style>MainMenu {visibility: hidden;}</style>"""  # Ẩn menu chính
 
-        # Main title of streamlit application
+        # Tiêu đề chính của ứng dụng Streamlit
         main_title_cfg = """<div><h1 style="color:#FF64DA; text-align:center; font-size:40px; margin-top:-50px;
-        font-family: 'Archivo', sans-serif; margin-bottom:20px;">Ultralytics YOLO Streamlit Application</h1></div>"""
+        font-family: 'Archivo', sans-serif; margin-bottom:20px;">Ứng dụng Streamlit Ultralytics YOLO</h1></div>"""
 
-        # Subtitle of streamlit application
+        # Phụ đề của ứng dụng Streamlit
         sub_title_cfg = """<div><h4 style="color:#042AFF; text-align:center; font-family: 'Archivo', sans-serif; 
-        margin-top:-15px; margin-bottom:50px;">Experience real-time object detection on your webcam with the power 
-        of Ultralytics YOLO! 🚀</h4></div>"""
+        margin-top:-15px; margin-bottom:50px;">Trải nghiệm phát hiện đối tượng thời gian thực trên webcam với sức mạnh 
+        của Ultralytics YOLO! 🚀</h4></div>"""
 
-        # Set html page configuration and append custom HTML
-        self.st.set_page_config(page_title="Ultralytics Streamlit App", layout="wide")
+        # Thiết lập cấu hình trang HTML và thêm HTML tùy chỉnh
+        self.st.set_page_config(page_title="Ứng dụng Streamlit Ultralytics", layout="wide")
         self.st.markdown(menu_style_cfg, unsafe_allow_html=True)
         self.st.markdown(main_title_cfg, unsafe_allow_html=True)
         self.st.markdown(sub_title_cfg, unsafe_allow_html=True)
 
     def sidebar(self):
-        """Configure the Streamlit sidebar for model and inference settings."""
-        with self.st.sidebar:  # Add Ultralytics LOGO
+        """Cấu hình thanh bên Streamlit cho các cài đặt mô hình và suy luận."""
+        with self.st.sidebar:  # Thêm logo Ultralytics
             logo = "https://raw.githubusercontent.com/ultralytics/assets/main/logo/Ultralytics_Logotype_Original.svg"
             self.st.image(logo, width=250)
 
-        self.st.sidebar.title("User Configuration")  # Add elements to vertical setting menu
+        self.st.sidebar.title("Cấu hình người dùng")  # Thêm các yếu tố vào menu cài đặt dọc
         self.source = self.st.sidebar.selectbox(
-            "Video",
+            "Nguồn video",
             ("webcam", "video"),
-        )  # Add source selection dropdown
-        self.enable_trk = self.st.sidebar.radio("Enable Tracking", ("Yes", "No"))  # Enable object tracking
+        )  # Thêm dropdown chọn nguồn
+        self.enable_trk = self.st.sidebar.radio("Bật theo dõi", ("Có", "Không"))  # Bật theo dõi đối tượng
         self.conf = float(
-            self.st.sidebar.slider("Confidence Threshold", 0.0, 1.0, self.conf, 0.01)
-        )  # Slider for confidence
-        self.iou = float(self.st.sidebar.slider("IoU Threshold", 0.0, 1.0, self.iou, 0.01))  # Slider for NMS threshold
+            self.st.sidebar.slider("Ngưỡng độ tin cậy", 0.0, 1.0, self.conf, 0.01)
+        )  # Thanh trượt cho độ tin cậy
+        self.iou = float(self.st.sidebar.slider("Ngưỡng IoU", 0.0, 1.0, self.iou, 0.01))  # Thanh trượt cho ngưỡng NMS
 
-        col1, col2 = self.st.columns(2)  # Create two columns for displaying frames
-        self.org_frame = col1.empty()  # Container for original frame
-        self.ann_frame = col2.empty()  # Container for annotated frame
+        col1, col2 = self.st.columns(2)  # Tạo hai cột để hiển thị khung hình
+        self.org_frame = col1.empty()  # Vùng chứa cho khung hình gốc
+        self.ann_frame = col2.empty()  # Vùng chứa cho khung hình chú thích
 
     def source_upload(self):
         """Xử lý tải lên tệp video hoặc chọn webcam qua giao diện Streamlit."""
@@ -145,91 +140,91 @@ class Inference:
         if self.source == "video":
             vid_file = self.st.sidebar.file_uploader("Tải lên tệp video", type=["mp4", "mov", "avi", "mkv"])
             if vid_file is not None:
-                g = io.BytesIO(vid_file.read())
-                with open("ultralytics.mp4", "wb") as out:
-                    out.write(g.read())
+                g = io.BytesIO(vid_file.read())  # Đối tượng BytesIO
+                with open("ultralytics.mp4", "wb") as out:  # Mở tệp tạm dưới dạng bytes
+                    out.write(g.read())  # Đọc bytes vào tệp
                 self.vid_file_name = "ultralytics.mp4"
         elif self.source == "webcam":
             self.vid_file_name = "webrtc"  # Đánh dấu nguồn là webcam qua webrtc
 
     def configure(self):
-        """Configure the model and load selected classes for inference."""
-        # Add dropdown menu for model selection
+        """Cấu hình mô hình và tải các lớp được chọn để suy luận."""
+        # Thêm menu dropdown để chọn mô hình
         available_models = [x.replace("yolo", "YOLO") for x in GITHUB_ASSETS_STEMS if x.startswith("yolo11")]
-        if self.model_path:  # If user provided the custom model, insert model without suffix as *.pt is added later
+        if self.model_path:  # Nếu người dùng cung cấp mô hình tùy chỉnh, thêm mô hình vào danh sách
             available_models.insert(0, self.model_path.split(".pt")[0])
-        selected_model = self.st.sidebar.selectbox("Model", available_models)
+        selected_model = self.st.sidebar.selectbox("Mô hình", available_models)
 
-        with self.st.spinner("Model is downloading..."):
-            self.model = YOLO(f"{selected_model.lower()}.pt")  # Load the YOLO model
-            class_names = list(self.model.names.values())  # Convert dictionary to list of class names
-        self.st.success("Model loaded successfully!")
+        with self.st.spinner("Đang tải mô hình..."):
+            self.model = YOLO(f"{selected_model.lower()}.pt")  # Tải mô hình YOLO
+            class_names = list(self.model.names.values())  # Chuyển từ điển thành danh sách tên lớp
+        self.st.success("Tải mô hình thành công!")
 
-        # Multiselect box with class names and get indices of selected classes
-        selected_classes = self.st.sidebar.multiselect("Classes", class_names, default=class_names[:3])
+        # Hộp chọn nhiều lớp với tên lớp và lấy chỉ số của các lớp được chọn
+        selected_classes = self.st.sidebar.multiselect("Lớp", class_names, default=class_names[:3])
         self.selected_ind = [class_names.index(option) for option in selected_classes]
 
-        if not isinstance(self.selected_ind, list):  # Ensure selected_options is a list
+        if not isinstance(self.selected_ind, list):  # Đảm bảo selected_ind là danh sách
             self.selected_ind = list(self.selected_ind)
 
-def inference(self):
-    """Thực hiện suy luận phát hiện đối tượng thời gian thực trên video hoặc webcam."""
-    self.web_ui()  # Khởi tạo giao diện web
-    self.sidebar()  # Tạo thanh bên
-    self.source_upload()  # Tải lên nguồn video
-    self.configure()  # Cấu hình ứng dụng
+    def inference(self):
+        """Thực hiện suy luận phát hiện đối tượng thời gian thực trên video hoặc webcam."""
+        self.web_ui()  # Khởi tạo giao diện web
+        self.sidebar()  # Tạo thanh bên
+        self.source_upload()  # Tải lên nguồn video
+        self.configure()  # Cấu hình ứng dụng
 
-    if self.st.sidebar.button("Bắt đầu"):
-        stop_button = self.st.button("Dừng")
-        if self.vid_file_name == "webrtc":
-            # Sử dụng streamlit-webrtc cho webcam
-            webrtc_ctx = webrtc_streamer(
-                key="example",
-                video_processor_factory=VideoProcessor,
-                rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-                media_stream_constraints={"video": True, "audio": False},
-            )
-            if webrtc_ctx.video_processor:
-                webrtc_ctx.video_processor.set_model(
-                    self.model, self.conf, self.iou, self.selected_ind, self.enable_trk
+        if self.st.sidebar.button("Bắt đầu"):
+            stop_button = self.st.button("Dừng")
+            if self.vid_file_name == "webrtc":
+                # Sử dụng streamlit-webrtc cho webcam
+                webrtc_ctx = webrtc_streamer(
+                    key="example",
+                    video_processor_factory=VideoProcessor,
+                    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+                    media_stream_constraints={"video": True, "audio": False},
                 )
-        else:
-            # Xử lý tệp video với OpenCV
-            cap = cv2.VideoCapture(self.vid_file_name)
-            if not cap.isOpened():
-                self.st.error("Không thể mở nguồn video.")
-                return
-
-            while cap.isOpened():
-                success, frame = cap.read()
-                if not success:
-                    self.st.warning("Không thể đọc khung hình từ nguồn video.")
-                    break
-
-                if self.enable_trk == "Yes":
-                    results = self.model.track(
-                        frame, conf=self.conf, iou=self.iou, classes=self.selected_ind, persist=True
+                if webrtc_ctx.video_processor:
+                    webrtc_ctx.video_processor.set_model(
+                        self.model, self.conf, self.iou, self.selected_ind, self.enable_trk
                     )
-                else:
-                    results = self.model(frame, conf=self.conf, iou=self.iou, classes=self.selected_ind)
+            else:
+                # Xử lý tệp video với OpenCV
+                cap = cv2.VideoCapture(self.vid_file_name)
+                if not cap.isOpened():
+                    self.st.error("Không thể mở nguồn video.")
+                    return
 
-                annotated_frame = results[0].plot()
+                while cap.isOpened():
+                    success, frame = cap.read()
+                    if not success:
+                        self.st.warning("Không thể đọc khung hình từ nguồn video.")
+                        break
 
-                if stop_button:
-                    cap.release()
-                    self.st.stop()
+                    if self.enable_trk == "Yes":
+                        results = self.model.track(
+                            frame, conf=self.conf, iou=self.iou, classes=self.selected_ind, persist=True
+                        )
+                    else:
+                        results = self.model(frame, conf=self.conf, iou=self.iou, classes=self.selected_ind)
 
-                self.org_frame.image(frame, channels="BGR")
-                self.ann_frame.image(annotated_frame, channels="BGR")
+                    annotated_frame = results[0].plot()
 
-            cap.release()  # Giải phóng tài nguyên video
+                    if stop_button:
+                        cap.release()
+                        self.st.stop()
+
+                    self.org_frame.image(frame, channels="BGR")
+                    self.ann_frame.image(annotated_frame, channels="BGR")
+
+                cap.release()  # Giải phóng tài nguyên video
 
 
 if __name__ == "__main__":
-    import sys  # Import the sys module for accessing command-line arguments
+    import sys  # Nhập module sys để truy cập đối số dòng lệnh
 
-    # Check if a model name is provided as a command-line argument
+    # Kiểm tra nếu tên mô hình được cung cấp qua đối số dòng lệnh
     args = len(sys.argv)
-    model = sys.argv[1] if args > 1 else None  # Assign first argument as the model name if provided
-    # Create an instance of the Inference class and run inference
+    model = sys.argv[1] if args > 1 else None  # Gán đối số đầu tiên làm tên mô hình nếu có
+    # Tạo thể hiện của lớp Inference và chạy suy luận
     Inference(model=model).inference()
