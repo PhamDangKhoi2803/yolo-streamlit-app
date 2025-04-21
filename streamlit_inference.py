@@ -123,21 +123,30 @@ class Inference:
         self.sidebar()
         self.source_upload()
         self.configure()
-
+    
         if self.st.sidebar.button("Start"):
             stop_button = self.st.button("Stop")
-
+    
+            # Kiểm tra nếu nguồn là webcam
             if self.source == "webcam":
                 webrtc_streamer(
                     key="object-detection",
                     video_transformer_factory=lambda: self.VideoTransformer(self.model, self.conf, self.iou, self.selected_ind, self.enable_trk),
-                    video_source=self.vid_file_name,
+                    video_source=0,  # Truyền chỉ số webcam, không phải file
                     sendback_audio=False,
                 )
-
+            elif self.source == "video" and self.vid_file_name != "":
+                webrtc_streamer(
+                    key="object-detection",
+                    video_transformer_factory=lambda: self.VideoTransformer(self.model, self.conf, self.iou, self.selected_ind, self.enable_trk),
+                    video_source=self.vid_file_name,  # Truyền video file nếu chọn nguồn là video
+                    sendback_audio=False,
+                )
+    
             # Handle stopping of inference
             if stop_button:
                 self.st.stop()
+
 
 if __name__ == "__main__":
     args = len(sys.argv)
